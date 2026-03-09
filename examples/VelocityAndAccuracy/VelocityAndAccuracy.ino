@@ -2,7 +2,8 @@
 
 Casic gps;
 
-static void printPV(const CasicNavPv& pv) {
+static void printPV(const CasicNavPv &pv)
+{
   Serial.println(F("---- NAV-PV ----"));
   Serial.print(F("lat, lon (deg): "));
   Serial.print(pv.lat_deg, 8);
@@ -43,12 +44,24 @@ static void printPV(const CasicNavPv& pv) {
   Serial.println(pv.numSVGLN);
 }
 
-enum CfgStep { CFG_IDLE, CFG_NAVPV_SEND, CFG_NAVPV_WAIT, CFG_GPSINFO_SEND, CFG_GPSINFO_WAIT, CFG_DONE };
+enum CfgStep
+{
+  CFG_IDLE,
+  CFG_NAVPV_SEND,
+  CFG_NAVPV_WAIT,
+  CFG_GPSINFO_SEND,
+  CFG_GPSINFO_WAIT,
+  CFG_DONE
+};
 CfgStep cfgStep = CFG_IDLE;
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
-  while (!Serial) { delay(10); }
+  while (!Serial)
+  {
+    delay(10);
+  }
 
   Serial1.begin(115200);
 
@@ -57,28 +70,40 @@ void setup() {
   cfgStep = CFG_NAVPV_SEND;
 }
 
-void loop() {
+void loop()
+{
   gps.processStream(Serial1);
   gps.serviceConfig();
 
-  if (cfgStep == CFG_NAVPV_SEND) {
-    if (gps.cfgSetMsgRate(Serial1, 0x01, 0x03, 1)) { // NAV-PV
+  if (cfgStep == CFG_NAVPV_SEND)
+  {
+    if (gps.cfgSetMsgRate(Serial1, 0x01, 0x03, 1))
+    { // NAV-PV
       cfgStep = CFG_NAVPV_WAIT;
     }
-  } else if (cfgStep == CFG_NAVPV_WAIT) {
+  }
+  else if (cfgStep == CFG_NAVPV_WAIT)
+  {
     CasicCfgResult r = gps.peekCfgResult();
-    if (r == CasicCfgResult::Ack || r == CasicCfgResult::Nak || r == CasicCfgResult::Timeout) {
+    if (r == CasicCfgResult::Ack || r == CasicCfgResult::Nak || r == CasicCfgResult::Timeout)
+    {
       Serial.print(F("NAV-PV cfg result: "));
       Serial.println((int)gps.readCfgResult());
       cfgStep = CFG_GPSINFO_SEND;
     }
-  } else if (cfgStep == CFG_GPSINFO_SEND) {
-    if (gps.cfgSetMsgRate(Serial1, 0x01, 0x20, 1)) { // NAV-GPSINFO
+  }
+  else if (cfgStep == CFG_GPSINFO_SEND)
+  {
+    if (gps.cfgSetMsgRate(Serial1, 0x01, 0x20, 1))
+    { // NAV-GPSINFO
       cfgStep = CFG_GPSINFO_WAIT;
     }
-  } else if (cfgStep == CFG_GPSINFO_WAIT) {
+  }
+  else if (cfgStep == CFG_GPSINFO_WAIT)
+  {
     CasicCfgResult r = gps.peekCfgResult();
-    if (r == CasicCfgResult::Ack || r == CasicCfgResult::Nak || r == CasicCfgResult::Timeout) {
+    if (r == CasicCfgResult::Ack || r == CasicCfgResult::Nak || r == CasicCfgResult::Timeout)
+    {
       Serial.print(F("NAV-GPSINFO cfg result: "));
       Serial.println((int)gps.readCfgResult());
       cfgStep = CFG_DONE;
@@ -86,7 +111,8 @@ void loop() {
     }
   }
 
-  if (gps.navPvUpdated()) {
+  if (gps.navPvUpdated())
+  {
     printPV(gps.navPv());
   }
 }

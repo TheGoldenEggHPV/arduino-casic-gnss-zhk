@@ -37,7 +37,7 @@ The library can send CFG messages (CFG-MSG, CFG-PRT, CFG-CFG) and parse ACK-ACK/
 
 ### CFG-RATE
 
-Use `cfgSetRate(interval_ms)` to change the navigation solution interval (e.g., 100 ms for 10 Hz).
+Use `cfgSetRate(interval_ms)` to change the navigation solution interval (e.g., 100 ms for 10 Hz). Note that some modules including the Quectel L76K module only support a minimum interval of 200ms (5Hz).
 
 
 ### Example: Disable NMEA for faster updates

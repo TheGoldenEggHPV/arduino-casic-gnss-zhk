@@ -1,7 +1,8 @@
 #pragma once
 #include <Arduino.h>
 
-struct CasicNavPv {
+struct CasicNavPv
+{
   uint32_t runTime_ms = 0;
   uint8_t posValid = 0;
   uint8_t velValid = 0;
@@ -41,7 +42,8 @@ struct CasicNavPv {
   float altitude_msl_m() const;
 };
 
-struct CasicSat {
+struct CasicSat
+{
   uint8_t chn = 0;
   uint8_t svid = 0;
   uint8_t flags = 0;
@@ -54,7 +56,8 @@ struct CasicSat {
   bool usedInSolution() const { return (flags & 0x01) != 0; }
 };
 
-struct CasicSatInfo {
+struct CasicSatInfo
+{
   uint32_t runTime_ms = 0;
   uint8_t numViewSv = 0;
   uint8_t numFixSv = 0;
@@ -62,14 +65,16 @@ struct CasicSatInfo {
   CasicSat sats[32];
 };
 
-struct CasicPortConfig {
+struct CasicPortConfig
+{
   uint8_t port_id = 0;
   uint8_t proto_mask = 0;
   uint16_t mode = 0;
   uint32_t baud_rate = 0;
 };
 
-enum class CasicCfgResult : uint8_t {
+enum class CasicCfgResult : uint8_t
+{
   None = 0,
   Pending,
   Ack,
@@ -77,64 +82,72 @@ enum class CasicCfgResult : uint8_t {
   Timeout,
 };
 
-class Casic {
+class Casic
+{
 public:
   Casic();
 
   void processByte(uint8_t b);
-  void processStream(Stream& s);
+  void processStream(Stream &s);
 
   bool navPvUpdated();
-  const CasicNavPv& navPv() const { return _navPv; }
+  const CasicNavPv &navPv() const { return _navPv; }
 
   bool satUpdated();
-  const CasicSatInfo& satInfo() const { return _satInfo; }
+  const CasicSatInfo &satInfo() const { return _satInfo; }
 
   // ---------------- Configuration (TX) ----------------
   // CASIC expects only one CFG message "in flight" at a time (wait for ACK/NAK).
-  bool cfgSetMsgRate(Stream& out, uint8_t msg_cls, uint8_t msg_id, uint16_t rate);
-  bool cfgQueryPort(Stream& out, uint8_t port_id);
-  bool cfgSetPort(Stream& out, uint8_t port_id, uint8_t proto_mask, uint16_t mode, uint32_t baud);
+  bool cfgSetMsgRate(Stream &out, uint8_t msg_cls, uint8_t msg_id, uint16_t rate);
+  bool cfgQueryPort(Stream &out, uint8_t port_id);
+  bool cfgSetPort(Stream &out, uint8_t port_id, uint8_t proto_mask, uint16_t mode, uint32_t baud);
 
   // CFG-RATE (0x06 0x04): set navigation solution interval in milliseconds (e.g., 100 for 10Hz)
-  bool cfgSetRate(Stream& out, uint16_t interval_ms);
+  bool cfgSetRate(Stream &out, uint16_t interval_ms);
 
   // Convenience: query then enable binary output / optionally disable NMEA output / optionally change baud.
   // This is a two-step process: call beginEnableBinary(), then:
   //  - wait for portConfigUpdated() to become true
   //  - call cfgSetPort() with your desired mask/mode/baud
   // (We don't auto-send the SET because the library doesn't store a Stream reference.)
-  void beginEnableBinary(Stream& out, uint8_t port_id, bool enableBinOut=true, bool disableTextOut=true, uint32_t newBaud=0);
+  void beginEnableBinary(Stream &out, uint8_t port_id, bool enableBinOut = true, bool disableTextOut = true, uint32_t newBaud = 0);
 
   static constexpr uint16_t CFG_MASK_PORT = 0x0001;
-  static constexpr uint16_t CFG_MASK_MSG  = 0x0002;
-  static constexpr uint16_t CFG_MASK_ALL  = 0xFFFF;
-  bool cfgSave(Stream& out, uint16_t mask=CFG_MASK_ALL);
+  static constexpr uint16_t CFG_MASK_MSG = 0x0002;
+  static constexpr uint16_t CFG_MASK_ALL = 0xFFFF;
+  bool cfgSave(Stream &out, uint16_t mask = CFG_MASK_ALL);
 
   void serviceConfig();
 
   // Blocking helper: waits for ACK/NAK/Timeout while continuing to parse bytes from 'io'.
   // Returns Ack/Nak/Timeout. (Timeout occurs if no matching ACK/NAK arrives in time.)
-  CasicCfgResult waitForCfgResult(Stream& io, uint32_t timeoutMs=500);
+  CasicCfgResult waitForCfgResult(Stream &io, uint32_t timeoutMs = 500);
 
   // Convenience: send a CFG-* message and block until its ACK/NAK/Timeout.
   // Returns false if a CFG transaction is already pending.
-  bool cfgSetMsgRateAndWait(Stream& io, uint8_t msg_cls, uint8_t msg_id, uint16_t rate, uint32_t timeoutMs=500, CasicCfgResult* outResult=nullptr);
-  bool cfgSetRateAndWait(Stream& io, uint16_t interval_ms, uint32_t timeoutMs=500, CasicCfgResult* outResult=nullptr);
-  bool cfgSaveAndWait(Stream& io, uint16_t mask=CFG_MASK_ALL, uint32_t timeoutMs=800, CasicCfgResult* outResult=nullptr);
+  bool cfgSetMsgRateAndWait(Stream &io, uint8_t msg_cls, uint8_t msg_id, uint16_t rate, uint32_t timeoutMs = 500, CasicCfgResult *outResult = nullptr);
+  bool cfgSetRateAndWait(Stream &io, uint16_t interval_ms, uint32_t timeoutMs = 500, CasicCfgResult *outResult = nullptr);
+  bool cfgSaveAndWait(Stream &io, uint16_t mask = CFG_MASK_ALL, uint32_t timeoutMs = 800, CasicCfgResult *outResult = nullptr);
 
   CasicCfgResult readCfgResult();
   CasicCfgResult peekCfgResult() const { return _cfgResult; }
 
   bool portConfigUpdated();
-  const CasicPortConfig& portConfig() const { return _portCfg; }
+  const CasicPortConfig &portConfig() const { return _portCfg; }
 
   uint32_t framesOk() const { return _framesOk; }
   uint32_t framesBadCk() const { return _framesBadCk; }
   uint32_t framesDropped() const { return _framesDropped; }
 
 private:
-  enum State : uint8_t { IDLE=0, SYNC2=1, LEN1=2, LEN2=3, BODY=4 };
+  enum State : uint8_t
+  {
+    IDLE = 0,
+    SYNC2 = 1,
+    LEN1 = 2,
+    LEN2 = 3,
+    BODY = 4
+  };
 
   static constexpr uint8_t SYNC1_BYTE = 0xBA;
   static constexpr uint8_t SYNC2_BYTE = 0xCE;
@@ -170,16 +183,16 @@ private:
   void resetFrame();
   void onFrameComplete();
 
-  static uint32_t calcChecksum(uint8_t cls, uint8_t id, const uint8_t* payload, uint16_t length);
+  static uint32_t calcChecksum(uint8_t cls, uint8_t id, const uint8_t *payload, uint16_t length);
 
-  static float readLEFloat(const uint8_t* p);
-  static double readLEDouble(const uint8_t* p);
-  static uint32_t readLEU32(const uint8_t* p);
-  static uint16_t readLEU16(const uint8_t* p);
-  static int16_t readLEI16(const uint8_t* p);
+  static float readLEFloat(const uint8_t *p);
+  static double readLEDouble(const uint8_t *p);
+  static uint32_t readLEU32(const uint8_t *p);
+  static uint16_t readLEU16(const uint8_t *p);
+  static int16_t readLEI16(const uint8_t *p);
 
-  static void writeFrame(Stream& out, uint8_t cls, uint8_t id, const uint8_t* payload, uint16_t length);
-  bool beginCfgTxn(uint8_t expectCls, uint8_t expectId, uint32_t timeoutMs=300);
+  static void writeFrame(Stream &out, uint8_t cls, uint8_t id, const uint8_t *payload, uint16_t length);
+  bool beginCfgTxn(uint8_t expectCls, uint8_t expectId, uint32_t timeoutMs = 300);
 
   static void buildCfgMsgSet(uint8_t msg_cls, uint8_t msg_id, uint16_t rate, uint8_t outPayload[4]);
   static void buildCfgCfg(uint16_t mask, uint8_t mode, uint8_t outPayload[4]);

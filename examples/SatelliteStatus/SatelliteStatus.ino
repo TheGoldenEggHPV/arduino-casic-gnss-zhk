@@ -2,29 +2,41 @@
 
 Casic gps;
 
-static const __FlashStringHelper* sysName(uint8_t sys) {
-  switch (sys) {
-    case 0: return F("GPS");
-    case 1: return F("BDS");
-    case 2: return F("GLONASS");
-    default: return F("Unknown");
+static const __FlashStringHelper *sysName(uint8_t sys)
+{
+  switch (sys)
+  {
+  case 0:
+    return F("GPS");
+  case 1:
+    return F("BDS");
+  case 2:
+    return F("GLONASS");
+  default:
+    return F("Unknown");
   }
 }
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
-  while (!Serial) { delay(10); }
+  while (!Serial)
+  {
+    delay(10);
+  }
 
   Serial1.begin(115200);
 
   Serial.println(F("Casic Satellite Status example"));
 }
 
-void loop() {
+void loop()
+{
   gps.processStream(Serial1);
 
-  if (gps.satUpdated()) {
-    const CasicSatInfo& si = gps.satInfo();
+  if (gps.satUpdated())
+  {
+    const CasicSatInfo &si = gps.satInfo();
 
     Serial.println(F("---- NAV-xxxINFO ----"));
     Serial.print(F("System: "));
@@ -36,10 +48,12 @@ void loop() {
     Serial.println(si.numFixSv);
 
     uint8_t n = si.numViewSv;
-    if (n > 32) n = 32;
+    if (n > 32)
+      n = 32;
 
-    for (uint8_t i = 0; i < n; i++) {
-      const CasicSat& s = si.sats[i];
+    for (uint8_t i = 0; i < n; i++)
+    {
+      const CasicSat &s = si.sats[i];
       Serial.print(F("SV "));
       Serial.print(s.svid);
       Serial.print(F("  C/N0="));
