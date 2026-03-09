@@ -1,202 +1,215 @@
+/**
+ * @file Casic.h
+ * @author Colin O'Flynn, Jotham Gates
+ * @brief Small Arduino library for parsing the CASIC GNSS binary protocol.
+ * @version 0.0.0
+ * @date 2026-02-15
+ *
+ * Created by Colin O'Flynn, 2026-02-15
+ * Modified by Jotham Gates, 2026-03-09
+ */
 #pragma once
 #include <Arduino.h>
-
-struct CasicNavPv
-{
-  uint32_t runTime_ms = 0;
-  uint8_t posValid = 0;
-  uint8_t velValid = 0;
-  uint8_t systemMask = 0;
-  uint8_t numSV = 0;
-  uint8_t numSVGPS = 0;
-  uint8_t numSVBDS = 0;
-  uint8_t numSVGLN = 0;
-
-  float pDop = NAN;
-
-  double lon_deg = NAN;
-  double lat_deg = NAN;
-
-  float height_ellipsoidal_m = NAN;
-  float sepGeoid_m = NAN;
-
-  float hAcc_var_m2 = NAN;
-  float vAcc_var_m2 = NAN;
-
-  float velN_mps = NAN;
-  float velE_mps = NAN;
-  float velU_mps = NAN;
-
-  float speed3D_mps = NAN;
-  float speed2D_mps = NAN;
-
-  float heading_deg = NAN;
-
-  float sAcc_var_m2ps2 = NAN;
-  float cAcc_var_deg2 = NAN;
-
-  float hAcc_1sigma_m() const;
-  float vAcc_1sigma_m() const;
-  float pos3D_1sigma_m() const;
-  float speedAcc_1sigma_mps() const;
-  float altitude_msl_m() const;
-};
-
-struct CasicSat
-{
-  uint8_t chn = 0;
-  uint8_t svid = 0;
-  uint8_t flags = 0;
-  uint8_t quality = 0;
-  uint8_t cno_dbhz = 0;
-  int8_t elev_deg = 0;
-  int16_t azim_deg = 0;
-  float prRes_m = NAN;
-
-  bool usedInSolution() const { return (flags & 0x01) != 0; }
-};
-
-struct CasicSatInfo
-{
-  uint32_t runTime_ms = 0;
-  uint8_t numViewSv = 0;
-  uint8_t numFixSv = 0;
-  uint8_t systemType = 0; // 0=GPS,1=BDS,2=GLONASS
-  CasicSat sats[32];
-};
-
-struct CasicPortConfig
-{
-  uint8_t port_id = 0;
-  uint8_t proto_mask = 0;
-  uint16_t mode = 0;
-  uint32_t baud_rate = 0;
-};
+#include "CasicMsgPayloads.h"
 
 enum class CasicCfgResult : uint8_t
 {
-  None = 0,
-  Pending,
-  Ack,
-  Nak,
-  Timeout,
+    NONE = 0,
+    PENDING,
+    ACK,
+    NAK,
+    TIMEOUT,
 };
 
+typedef void (*NavPvCallback)(CasicMsgPayloads::NavPv &);
+typedef void (*NavTimeUtcCallback)(CasicMsgPayloads::NavTimeUTC &);
+typedef void (*NavInfoCallback)(CasicMsgPayloads::NavSolutionInfo &);
+
+// RXM-SVPOS messages are even bigger, but we probably don't wish to reserve 1552 bytes just in case.
+#define MAX_PAYLOAD_SIZE max(max(sizeof(CasicMsgPayloads::NavPv), sizeof(CasicMsgPayloads::NavSolutionInfo)), sizeof(CasicMsgPayloads::NavTimeUTC))
+#define CASIC_HEADER0 0xba
+#define CASIC_HEADER1 0xce
+#define CASIC_RECEIVE_TIMEOUT 1000
+#define CASIC_CFG_TIMEOUT 1000 // The timeout to wait for acknowledgements.
+/**
+ * @brief Class for a message.
+ *
+ */
+class CasicMsg
+{
+public:
+    /**
+     * @brief Construct a new Casic Msg object
+     *
+     * @param payload buffer to use for the message payload.
+     * @param payloadLength how long the buffer is.
+     */
+    CasicMsg(char *const payload, const uint16_t payloadLength) : payload(payload),
+                                                                  payloadLength(payloadLength) {}
+    void send(Stream &serial);
+
+    uint16_t length;
+    uint8_t cls;
+    uint8_t id;
+    char *const payload;
+    const uint16_t payloadLength;
+
+    /**
+     * @brief Calcultes the checksum for a message.
+     *
+     * @return uint32_t the calculated checksum.
+     */
+    uint32_t checksum();
+
+    /**
+     * @brief Checks if the received checksum matches the valid one.
+     *
+     * @param received
+     * @return true
+     * @return false
+     */
+    bool checkChecksum(uint32_t received);
+};
+
+/**
+ * @brief Enumerator that represents the current configuration state.
+ * 
+ */
+enum class CfgState
+{
+    WAITING,
+    IDLE,
+    TIMED_OUT,
+    NACK_RECEIVED
+};
+
+/**
+ * @brief Class that implements the CASIC protocol for talking to a GNSS module.
+ *
+ */
 class Casic
 {
 public:
-  Casic();
+    Casic(
+        Stream &serial,
+        NavPvCallback navPvCallback = nullptr,
+        NavTimeUtcCallback navTimeUtcCallback = nullptr,
+        NavInfoCallback navInfoCallback = nullptr) : m_ser(serial),
+                                                     m_navPvCallback(navPvCallback),
+                                                     m_navTimeUtcCallback(navTimeUtcCallback),
+                                                     m_navInfoCallback(navInfoCallback),
+                                                     m_msg(m_msgPayload, sizeof(m_msgPayload)) {}
 
-  void processByte(uint8_t b);
-  void processStream(Stream &s);
+    /**
+     * @brief Reads the latest data from the GPS and processes it.
+     * 
+     */
+    void update();
 
-  bool navPvUpdated();
-  const CasicNavPv &navPv() const { return _navPv; }
+    /**
+     * @brief Checks how configuration is proceeding.
+     * This also checks if a timeout has occurred or other error.
+     * @return CfgState the latest state.
+     */
+    CfgState getCfgState();
 
-  bool satUpdated();
-  const CasicSatInfo &satInfo() const { return _satInfo; }
+    /**
+     * @brief Configures the serial port(s) of the GNSS module.
+     * This also enables and disables NMEA and binary inputs and outputs.
+     * 
+     * @param cfg the configuration to send. This includes the parameter that specifies which port to apply it to.
+     * @return true if the message was sent.
+     * @return false if another message is already waiting to be sent.
+     */
+    bool cfgPrt(CasicMsgPayloads::CfgPrt &cfg);
 
-  // ---------------- Configuration (TX) ----------------
-  // CASIC expects only one CFG message "in flight" at a time (wait for ACK/NAK).
-  bool cfgSetMsgRate(Stream &out, uint8_t msg_cls, uint8_t msg_id, uint16_t rate);
-  bool cfgQueryPort(Stream &out, uint8_t port_id);
-  bool cfgSetPort(Stream &out, uint8_t port_id, uint8_t proto_mask, uint16_t mode, uint32_t baud);
+    /**
+     * @brief Configures the rate of each message type being sent.
+     * 
+     * @param cfg the message settings.
+     * @return true if the message was sent.
+     * @return false if another message is already waiting to be sent.
+     */
+    bool cfgMsg(CasicMsgPayloads::CfgMsg &cfg);
 
-  // CFG-RATE (0x06 0x04): set navigation solution interval in milliseconds (e.g., 100 for 10Hz)
-  bool cfgSetRate(Stream &out, uint16_t interval_ms);
+    /**
+     * @brief Configures the rate of position updates.
+     * 
+     * @param cfg the message settings.
+     * @return true if the message was sent.
+     * @return false if another message is already waiting to be sent.
+     */
+    bool cfgRate(CasicMsgPayloads::CfgRate &cfg);
 
-  // Convenience: query then enable binary output / optionally disable NMEA output / optionally change baud.
-  // This is a two-step process: call beginEnableBinary(), then:
-  //  - wait for portConfigUpdated() to become true
-  //  - call cfgSetPort() with your desired mask/mode/baud
-  // (We don't auto-send the SET because the library doesn't store a Stream reference.)
-  void beginEnableBinary(Stream &out, uint8_t port_id, bool enableBinOut = true, bool disableTextOut = true, uint32_t newBaud = 0);
+    /**
+     * @brief Convenience function that waits until a config message is acknowledged (or fails).
+     * 
+     */
+    void waitForCfg();
 
-  static constexpr uint16_t CFG_MASK_PORT = 0x0001;
-  static constexpr uint16_t CFG_MASK_MSG = 0x0002;
-  static constexpr uint16_t CFG_MASK_ALL = 0xFFFF;
-  bool cfgSave(Stream &out, uint16_t mask = CFG_MASK_ALL);
-
-  void serviceConfig();
-
-  // Blocking helper: waits for ACK/NAK/Timeout while continuing to parse bytes from 'io'.
-  // Returns Ack/Nak/Timeout. (Timeout occurs if no matching ACK/NAK arrives in time.)
-  CasicCfgResult waitForCfgResult(Stream &io, uint32_t timeoutMs = 500);
-
-  // Convenience: send a CFG-* message and block until its ACK/NAK/Timeout.
-  // Returns false if a CFG transaction is already pending.
-  bool cfgSetMsgRateAndWait(Stream &io, uint8_t msg_cls, uint8_t msg_id, uint16_t rate, uint32_t timeoutMs = 500, CasicCfgResult *outResult = nullptr);
-  bool cfgSetRateAndWait(Stream &io, uint16_t interval_ms, uint32_t timeoutMs = 500, CasicCfgResult *outResult = nullptr);
-  bool cfgSaveAndWait(Stream &io, uint16_t mask = CFG_MASK_ALL, uint32_t timeoutMs = 800, CasicCfgResult *outResult = nullptr);
-
-  CasicCfgResult readCfgResult();
-  CasicCfgResult peekCfgResult() const { return _cfgResult; }
-
-  bool portConfigUpdated();
-  const CasicPortConfig &portConfig() const { return _portCfg; }
-
-  uint32_t framesOk() const { return _framesOk; }
-  uint32_t framesBadCk() const { return _framesBadCk; }
-  uint32_t framesDropped() const { return _framesDropped; }
-
+    // TODO: Query config messages.
 private:
-  enum State : uint8_t
-  {
-    IDLE = 0,
-    SYNC2 = 1,
-    LEN1 = 2,
-    LEN2 = 3,
-    BODY = 4
-  };
+    /**
+     * @brief Processes a single byte from the module.
+     *
+     * @param value the incoming value.
+     */
+    inline void m_processByte(char value);
 
-  static constexpr uint8_t SYNC1_BYTE = 0xBA;
-  static constexpr uint8_t SYNC2_BYTE = 0xCE;
-  static constexpr uint16_t MAX_PAYLOAD = 512;
-  static constexpr uint16_t MAX_FRAME = 2 + 2 + 2 + MAX_PAYLOAD + 4;
+    /**
+     * @brief Checks the checksum and if it matches (and the message type is
+     * recognised), calls a callback.
+     *
+     */
+    inline void m_checkHandleMsg();
 
-  State _state;
-  uint16_t _len;
-  uint16_t _remaining;
+    /**
+     * @brief Sends a config message and sets the flags to say we are waiting.
+     * 
+     * @param cfg the message to send.
+     * @return true if the message was sent successfully and we are now waiting for acknowledgement.
+     * @return false if we were waiting for another message already.
+     */
+    bool m_sendCfg(CasicMsg &cfg);
+    
+    /**
+     * @brief Handles an acknowledgement or negative acknowledgement message.
+     * 
+     * @param isAck true when the message is an ack, false otherwise.
+     * @param msg the message that was received.
+     */
+    inline void m_handleAckNack(bool isAck, CasicMsgPayloads::Ack &msg);
 
-  uint8_t _buf[MAX_FRAME];
-  uint16_t _bufLen;
+    // Serial and callbacks.
+    Stream &m_ser;
+    NavPvCallback m_navPvCallback;
+    NavTimeUtcCallback m_navTimeUtcCallback;
+    NavInfoCallback m_navInfoCallback;
 
-  CasicNavPv _navPv;
-  CasicSatInfo _satInfo;
-  CasicPortConfig _portCfg;
+    /**
+     * @brief The state of reading each packet.
+     *
+     */
+    enum ReceiveState
+    {
+        IDLE = 0,
+        SYNC2 = 1,
+        LEN1 = 2,
+        LEN2 = 3,
+        CLASS = 4,
+        ID = 5,
+        PAYLOAD = 6,
+        CHECKSUM = 7
+    } m_receiveState;
+    char m_msgPayload[MAX_PAYLOAD_SIZE];
+    CasicMsg m_msg;
+    uint16_t m_receivedBytes;
+    uint32_t m_receiveChecksum;
+    uint32_t m_receiveStartTime;
 
-  bool _navPvUpdated;
-  bool _satUpdated;
-  bool _portCfgUpdated;
-
-  uint32_t _framesOk;
-  uint32_t _framesBadCk;
-  uint32_t _framesDropped;
-
-  // Config transaction tracking
-  CasicCfgResult _cfgResult;
-  bool _cfgPending;
-  uint8_t _cfgExpectCls;
-  uint8_t _cfgExpectId;
-  uint32_t _cfgDeadlineMs;
-
-  void resetFrame();
-  void onFrameComplete();
-
-  static uint32_t calcChecksum(uint8_t cls, uint8_t id, const uint8_t *payload, uint16_t length);
-
-  static float readLEFloat(const uint8_t *p);
-  static double readLEDouble(const uint8_t *p);
-  static uint32_t readLEU32(const uint8_t *p);
-  static uint16_t readLEU16(const uint8_t *p);
-  static int16_t readLEI16(const uint8_t *p);
-
-  static void writeFrame(Stream &out, uint8_t cls, uint8_t id, const uint8_t *payload, uint16_t length);
-  bool beginCfgTxn(uint8_t expectCls, uint8_t expectId, uint32_t timeoutMs = 300);
-
-  static void buildCfgMsgSet(uint8_t msg_cls, uint8_t msg_id, uint16_t rate, uint8_t outPayload[4]);
-  static void buildCfgCfg(uint16_t mask, uint8_t mode, uint8_t outPayload[4]);
-  static void buildCfgPrtSet(uint8_t port_id, uint8_t proto_mask, uint16_t mode, uint32_t baud, uint8_t outPayload[8]);
-  static void buildCfgPrtQuery(uint8_t port_id, uint8_t outPayload[1]);
-  static void buildCfgRateSet(uint16_t interval_ms, uint8_t outPayload[4]);
+    // Config stuff.
+    CfgState m_cfgState = CfgState::IDLE; // Whether we need an acknowledgement or it has timed out.
+    uint8_t m_cfgCls; // The message class we are waiting for an acknowledgement for.
+    uint8_t m_cfgId; // The message ID we are waiting for an acknowledgement for.
+    uint32_t m_cfgStartTime; // When we started sending a message.
 };
