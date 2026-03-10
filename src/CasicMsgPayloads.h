@@ -50,7 +50,7 @@ namespace CasicMsgPayloads
             FAST_MODE_POS = 5,
             TWOD_POS = 6,
             THREED_POS = 7,
-            GNSS_DR_COMBINED = 8
+            GNSS_DR_COMBINED = 8 // GNSS and dead-reckoning combined.
         } posValid;
 
         /**
@@ -73,7 +73,7 @@ namespace CasicMsgPayloads
          * @brief Shows which GNSS systems are being used.
          *
          */
-        struct GNSSSystem
+        struct __attribute__((__packed__)) GNSSSystem
         {
             bool gps : 1;
             bool bds : 1;
@@ -127,7 +127,7 @@ namespace CasicMsgPayloads
         union TimeValid
         {
             uint8_t data;
-            struct Bits
+            struct __attribute__((__packed__)) Bits
             {
                 bool validDuringWeek : 1;
                 bool validWeekly : 1;
@@ -195,7 +195,7 @@ namespace CasicMsgPayloads
          * This repeats numViewSv times, (0-32).
          *
          */
-        struct CasicSat
+        struct __attribute__((__packed__)) CasicSat
         {
             uint8_t chn;  // The channel number.
             uint8_t svid; // The satellite number.
@@ -207,7 +207,7 @@ namespace CasicMsgPayloads
             union Flags
             {
                 uint8_t data;
-                struct Bits
+                struct __attribute__((__packed__)) Bits
                 {
                     bool usedInSolution : 1;        // Bit 0. This satellite is used when 1.
                     int reserved : 3;               // Bits 1-3 inclusive.
@@ -220,13 +220,13 @@ namespace CasicMsgPayloads
                         RESERVED1 = 2,
                         EPHEMERIS = 3 // Prediction based on ephemeris.
                     } prediction : 2;
-                };
+                } bits;
             } system;
 
             union Quality
             {
                 uint8_t data;
-                struct Bits
+                struct __attribute__((__packed__)) Bits
                 {
                     bool pseudoDistanceMeasValid : 1;       // = 1 for pseudo-distance measurements prMes valid
                     bool carrierPhaseMeasValid : 1;         // = 1 for carrier phase measurements cpMes valid
@@ -235,7 +235,7 @@ namespace CasicMsgPayloads
                     bool reserved : 1;
                     bool carrierFreqValid : 1; // = 1, indicates that the carrier frequency is valid
                     int reserved1 : 2;
-                };
+                } bits;
             } quality;
 
             uint8_t cn0;  // Signal to noise ratio in dB-Hz.
@@ -270,26 +270,26 @@ namespace CasicMsgPayloads
         union ProtocolMask
         {
             uint8_t data;
-            struct Bits
+            struct __attribute__((__packed__)) Bits
             {
                 bool binaryInput : 1;  // Binary protocol input (bit 0).
                 bool textInput : 1;    // Text protocol input (bit 1).
                 int reserved : 2;      // Reserved.
                 bool binaryOutput : 1; // Binary protocol output (bit 4).
                 bool textOutput : 1;   // Text protocol output (bit 5).
-            };
+            } bits;
         } protoMask;
 
         union UartMode
         {
             uint16_t data;
-            struct Bits
+            struct __attribute__((__packed__)) Bits
             {
-                int reserved : 6;
+                int reserved : 4;
                 /**
                  * @brief The number of bits per word to send at a time.
                  * 8 is usually the default / safe option nowadays.
-                 * Bits [7:6]
+                 * Bits [7:6], but actually needs to be bits [6:5]?
                  */
                 enum class BitsPerChar
                 {
@@ -298,6 +298,8 @@ namespace CasicMsgPayloads
                     BITS_7 = 2,
                     BITS_8 = 3
                 } bitsPerChar : 2;
+
+                int reserved1 : 2;
 
                 enum class Parity
                 {
@@ -315,7 +317,7 @@ namespace CasicMsgPayloads
                     TWO = 2,
                     RESERVED = 3
                 } stopBits : 2;
-            };
+            } bits;
         } mode;
 
         uint32_t baudRate; // The baud rate in bits / second.
@@ -323,7 +325,7 @@ namespace CasicMsgPayloads
 
     /**
      * @brief Sets / queries the message sending frequency.
-     * 
+     *
      */
     struct __attribute__((__packed__)) CfgMsg
     {
@@ -334,7 +336,7 @@ namespace CasicMsgPayloads
         /**
          * @brief If rate is one of these values there is a special meaning.
          * If not, then the message is output once every <rate> positions.
-         * 
+         *
          */
         enum Rate : uint16_t
         {
@@ -345,14 +347,14 @@ namespace CasicMsgPayloads
 
     /**
      * @brief Sets / queries the positioning interval.
-     * 
+     *
      */
     struct __attribute__((__packed__)) CfgRate
     {
         /**
          * @brief The interval in ms.
          * Typically this includes 1000 (1Hz), 500 (2Hz), 200 (5Hz) and sometimes 100 (10Hz).
-         * 
+         *
          */
         uint16_t interval;
         uint16_t reserved;
@@ -361,7 +363,7 @@ namespace CasicMsgPayloads
 
 /**
  * @brief Message classes and IDs.
- * 
+ *
  */
 #define CASIC_ACK_CLASS 0x05
 #define CASIC_ACK_ID 0x01

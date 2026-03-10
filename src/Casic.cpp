@@ -9,7 +9,7 @@
  * Modified by Jotham Gates, 2026-03-09
  */
 #include "Casic.h"
-
+#include <Arduino.h>
 void CasicMsg::send(Stream &serial)
 {
     serial.write(CASIC_HEADER0);
@@ -18,7 +18,8 @@ void CasicMsg::send(Stream &serial)
     serial.write(cls);
     serial.write(id);
     serial.write(payload, length);
-    serial.write(checksum());
+    uint32_t sum = checksum();
+    serial.write(reinterpret_cast<uint8_t *>(&sum), 4);
 }
 
 uint32_t CasicMsg::checksum()
@@ -26,7 +27,7 @@ uint32_t CasicMsg::checksum()
     uint32_t checksum = (id << 24) + (cls << 16) + length;
     if (length <= payloadLength)
     {
-        for (int i = 0; i < length; i += 4)
+        for (int i = 0; i < length / 4; i++)
         {
             checksum += reinterpret_cast<uint32_t *>(payload)[i];
         }
@@ -46,7 +47,8 @@ bool CasicMsg::checkChecksum(uint32_t received)
 
 void Casic::update()
 {
-    while (m_ser.available())
+    int bytesAvailable = m_ser.available();
+    for (int i = 0; i < bytesAvailable; i++)
     {
         m_processByte(m_ser.read());
     }
@@ -122,7 +124,7 @@ void Casic::m_processByte(char value)
         m_msg.cls = value;
         m_receiveState = ID;
         break;
-    
+
     case ID:
         m_msg.id = value;
         m_receiveState = PAYLOAD;
@@ -146,6 +148,7 @@ void Casic::m_processByte(char value)
         {
             // We are done. Check the checksum.
             m_checkHandleMsg();
+            m_receiveState = IDLE;
         }
     }
 }
@@ -153,7 +156,7 @@ void Casic::m_processByte(char value)
 /**
  * @brief Combines the class and id into a single 16 bit number to make
  * comparisons easier.
- * 
+ *
  */
 #define MERGE_CLASS_ID(CLS, ID) ((CLS) << 8 | ID)
 
@@ -251,7 +254,7 @@ bool Casic::m_sendCfg(CasicMsg &cfg)
 
 bool Casic::cfgPrt(CasicMsgPayloads::CfgPrt &cfg)
 {
-    CasicMsg msg(reinterpret_cast<char*>(&cfg), sizeof(cfg));
+    CasicMsg msg(reinterpret_cast<char *>(&cfg), sizeof(cfg));
     msg.cls = CASIC_CFG_CLASS;
     msg.id = CASIC_CFG_PRT_ID;
     msg.length = sizeof(cfg);
@@ -260,7 +263,7 @@ bool Casic::cfgPrt(CasicMsgPayloads::CfgPrt &cfg)
 
 bool Casic::cfgMsg(CasicMsgPayloads::CfgMsg &cfg)
 {
-    CasicMsg msg(reinterpret_cast<char*>(&cfg), sizeof(cfg));
+    CasicMsg msg(reinterpret_cast<char *>(&cfg), sizeof(cfg));
     msg.cls = CASIC_CFG_CLASS;
     msg.id = CASIC_CFG_MSG_ID;
     msg.length = sizeof(cfg);
@@ -269,7 +272,7 @@ bool Casic::cfgMsg(CasicMsgPayloads::CfgMsg &cfg)
 
 bool Casic::cfgRate(CasicMsgPayloads::CfgRate &cfg)
 {
-    CasicMsg msg(reinterpret_cast<char*>(&cfg), sizeof(cfg));
+    CasicMsg msg(reinterpret_cast<char *>(&cfg), sizeof(cfg));
     msg.cls = CASIC_CFG_CLASS;
     msg.id = CASIC_CFG_RATE_ID;
     msg.length = sizeof(cfg);
@@ -280,6 +283,7 @@ void Casic::waitForCfg()
 {
     while (getCfgState() == CfgState::WAITING)
     {
+        update();
         delay(1);
     }
 }

@@ -29,8 +29,8 @@ typedef void (*NavInfoCallback)(CasicMsgPayloads::NavSolutionInfo &);
 #define MAX_PAYLOAD_SIZE max(max(sizeof(CasicMsgPayloads::NavPv), sizeof(CasicMsgPayloads::NavSolutionInfo)), sizeof(CasicMsgPayloads::NavTimeUTC))
 #define CASIC_HEADER0 0xba
 #define CASIC_HEADER1 0xce
-#define CASIC_RECEIVE_TIMEOUT 1000
-#define CASIC_CFG_TIMEOUT 1000 // The timeout to wait for acknowledgements.
+#define CASIC_RECEIVE_TIMEOUT 2000000
+#define CASIC_CFG_TIMEOUT 2000000 // The timeout to wait for acknowledgements.
 /**
  * @brief Class for a message.
  *
