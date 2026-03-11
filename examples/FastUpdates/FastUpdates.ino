@@ -47,7 +47,7 @@ void setup()
     // Don't customise the pins (other boards).
     SERIAL_GNSS.begin(GNSS_BAUD_INITIAL);
 #endif
-
+    delay(500); // Extra time to allow the module to start.
     setupGNSS();
 }
 

@@ -180,21 +180,35 @@ void Casic::m_checkHandleMsg()
 
         case MERGE_CLASS_ID(CASIC_NAV_CLASS, CASIC_NAV_PV_ID):
             // NAV-PV
-            if (m_navPvCallback && m_msg.length == sizeof(CasicMsgPayloads::NavPv))
+            if (m_msg.length == sizeof(CasicMsgPayloads::NavPv))
             {
                 // Callback is assigned and we have a valid message length.
-                CasicMsgPayloads::NavPv *structRef = reinterpret_cast<CasicMsgPayloads::NavPv *>(m_msg.payload);
-                m_navPvCallback(*structRef);
+                CasicMsgPayloads::NavPv &structRef = *reinterpret_cast<CasicMsgPayloads::NavPv *>(m_msg.payload);
+                if (m_navPvCallback)
+                {
+                    m_navPvCallback(structRef);
+                }
+                if (m_gnssHandler)
+                {
+                    m_gnssHandler->handleNavPv(structRef);
+                }
             }
             break;
 
         case MERGE_CLASS_ID(CASIC_NAV_CLASS, CASIC_NAV_TIMEUTC_ID):
             // NAV-TIMEUTC
-            if (m_navTimeUtcCallback && m_msg.length == sizeof(CasicMsgPayloads::NavTimeUTC))
+            if (m_msg.length == sizeof(CasicMsgPayloads::NavTimeUTC))
             {
                 // Callback is assigned and we have a valid message length.
-                CasicMsgPayloads::NavTimeUTC *structRef = reinterpret_cast<CasicMsgPayloads::NavTimeUTC *>(m_msg.payload);
-                m_navTimeUtcCallback(*structRef);
+                CasicMsgPayloads::NavTimeUTC &structRef = *reinterpret_cast<CasicMsgPayloads::NavTimeUTC *>(m_msg.payload);
+                if (m_navTimeUtcCallback)
+                {
+                    m_navTimeUtcCallback(structRef);
+                }
+                if (m_gnssHandler)
+                {
+                    m_gnssHandler->handleNavTimeUtc(structRef);
+                }
             }
             break;
 
@@ -202,11 +216,18 @@ void Casic::m_checkHandleMsg()
         case MERGE_CLASS_ID(CASIC_NAV_CLASS, CASIC_NAV_BDSINFO_ID):
         case MERGE_CLASS_ID(CASIC_NAV_CLASS, CASIC_NAV_GLNINFO_ID):
             // NAV-GPSINFO, NAV-BDSINFO, NAV-GLNINFO respectively.
-            if (m_navInfoCallback && m_msg.length == sizeof(CasicMsgPayloads::NavSolutionInfo))
+            if (m_msg.length == sizeof(CasicMsgPayloads::NavSolutionInfo))
             {
                 // Callback is assigned and we have a valid message length.
-                CasicMsgPayloads::NavSolutionInfo *structRef = reinterpret_cast<CasicMsgPayloads::NavSolutionInfo *>(m_msg.payload);
-                m_navInfoCallback(*structRef);
+                CasicMsgPayloads::NavSolutionInfo &structRef = *reinterpret_cast<CasicMsgPayloads::NavSolutionInfo *>(m_msg.payload);
+                if (m_navInfoCallback)
+                {
+                    m_navInfoCallback(structRef);
+                }
+                if (m_gnssHandler)
+                {
+                    m_gnssHandler->handleNavInfo(structRef);
+                }
             }
             break;
 
